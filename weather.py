@@ -1,20 +1,22 @@
-import shutil
-
-import requests
+import argparse
+import json
 import os
-
-import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
-
 import re
+import shutil
+import sys
+
+import matplotlib.image as mpimg
+import matplotlib.pyplot as plt
+import requests
 from googletrans import Translator
 
 # Data extracted from AEMET
 # API AEMET OpenData
 
-# TODO: Abstract aemet request to function
 
 def get_weather():
+	weather = {}
+
 	# Get Aemet information for specific town
 	aemet_request = requests.get(
 		'https://opendata.aemet.es/opendata/api/prediccion/especifica/municipio/horaria/28150',
@@ -28,37 +30,45 @@ def get_weather():
 	date = aemet_data['prediccion']['dia'][0]['fecha']
 	dawn = aemet_data['prediccion']['dia'][0]['orto']
 	sunset = aemet_data['prediccion']['dia'][0]['ocaso']
+	weather['status'] = [date, dawn, sunset]
 
 	sky_status = aemet_data['prediccion']['dia'][0]['estadoCielo']
 	sky_status_next = aemet_data['prediccion']['dia'][1]['estadoCielo']
+	weather['sky'] = [sky_status, sky_status_next]
 
 	temperatures = aemet_data['prediccion']['dia'][0]['temperatura']
 	temperatures_next = aemet_data['prediccion']['dia'][1]['temperatura']
+	weather['temperatures'] = [temperatures, temperatures_next]
 
 	thermal_sensation = aemet_data['prediccion']['dia'][0]['sensTermica']
 	thermal_sensation_next = aemet_data['prediccion']['dia'][1]['sensTermica']
+	weather['thermal_sensation'] = [thermal_sensation, thermal_sensation_next]
 
 	relative_humidity = aemet_data['prediccion']['dia'][0]['humedadRelativa']
 	relative_humidity_next = aemet_data['prediccion']['dia'][1]['humedadRelativa']
+	weather['humidity'] = [relative_humidity, relative_humidity_next]
 
-	# TODO: Two lines per data
 	wind = aemet_data['prediccion']['dia'][0]['vientoAndRachaMax']
 	wind_next = aemet_data['prediccion']['dia'][1]['vientoAndRachaMax']
+	weather['wind'] = [wind, wind_next]
 
 	precipitation = aemet_data['prediccion']['dia'][0]['precipitacion']
 	precipitation_next = aemet_data['prediccion']['dia'][1]['precipitacion']
+	weather['precipitation'] = [precipitation, precipitation_next]
 
 	storm_probability = aemet_data['prediccion']['dia'][0]['probTormenta']
 	storm_probability_next = aemet_data['prediccion']['dia'][1]['probTormenta']
+	weather['storm'] = [storm_probability, storm_probability_next]
 
 	snow = aemet_data['prediccion']['dia'][0]['nieve']
 	snow_next = aemet_data['prediccion']['dia'][1]['nieve']
+	weather['snow'] = [snow, snow_next]
 
 	snow_probability = aemet_data['prediccion']['dia'][0]['probNieve']
 	snow_probability_next = aemet_data['prediccion']['dia'][1]['probNieve']
+	weather['snow_probability'] = [snow_probability, snow_probability_next]
 
-	#TODO: Return weather dict
-	return temperatures
+	return weather
 
 
 def get_uv_radiation():
@@ -170,7 +180,7 @@ def get_municipalities():
 	return aemet_request.json()
 
 
-def get_weather_prediction(date_pred, community_pred=None):
+def get_weather_prediction(date_pred, community_pred=None, translate=False):
 	# TODO: Include table communities
 
 	if community_pred:
@@ -225,34 +235,53 @@ def get_weather_prediction(date_pred, community_pred=None):
 	# Translate data to english
 	# TODO: Specify library requirement
 	# https://www.thepythoncode.com/article/translate-text-in-python
-	translator = Translator()
-	meteo_phenomenon = translator.translate(meteo_phenomenon, dest='en').text
-	prediction = translator.translate(prediction, dest='en').text
+	if translate:
+		translator = Translator()
+		meteo_phenomenon = translator.translate(meteo_phenomenon, dest='en').text
+		prediction = translator.translate(prediction, dest='en').text
 
 	return meteo_phenomenon, prediction
+
 
 # Request your personal API key in AEMET and set as environment variable
 params = {'api_key': os.environ['API_KEY']}
 
-weather_aemet = get_weather()
+try:
+	weather_aemet = get_weather()
+except:
+	print('Could not retrieve weather information.')
 
 # UV Radiation
-uv_radiation = get_uv_radiation()
-print(uv_radiation)
+try:
+	uv_radiation = get_uv_radiation()
+except:
+	print('Could not retrieve UV radiation.')
 
 # Satellite information (vegetation and temperature)
-satellite_information()
+try:
+	satellite_information()
+except:
+	print('Could not retrieve satellite information.')
+
 
 # Returns all the municipalities of Spain.
-municipalities_information = get_municipalities()
-# print(municipalities_information)
+try:
+	municipalities_information = get_municipalities()
+	with open('muni.txt', 'w') as f:
+		f.write(json.dumps(municipalities_information, ensure_ascii=False))
+		f.close()
+except:
+	print('Not possible to obtain municipalities')
 
 # General weather predictions.
 # Set community to False to get National prediction. Otherwise, set to any community code
 # Date codes: (0) today, (1) tomorrow, (2) after tomorrow
-# TODO: Test predictions. Based on request data, today is for yesterday
-community = 'mad'
-date = 0
-meteo_phenomenon, weather_prediction = get_weather_prediction(date, community)
-print('Significant phenomena: {}'.format(meteo_phenomenon))
-print('Weather prediction: {}'.format(weather_prediction))
+try:
+	community = 'mad'
+	date = 0
+	translate = False
+	meteo_phenomenon, weather_prediction = get_weather_prediction(date, community, translate)
+	print('Significant phenomena: {}'.format(meteo_phenomenon))
+	print('Weather prediction: {}'.format(weather_prediction))
+except:
+	print('Not possible to get weather predictions')
